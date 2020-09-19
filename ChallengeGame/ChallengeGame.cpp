@@ -4,6 +4,7 @@
 #include <iostream>
 #include <string>
 #include <list>
+#include <vector>
 #include <conio.h>
 #include <windows.h>
 #include <chrono>
@@ -11,7 +12,7 @@
 
 using namespace std;
 
-#pragma region Заголов.h
+#pragma region EngineClass
 class Timer
 {
 public:
@@ -53,17 +54,30 @@ private:
     std::chrono::time_point<std::chrono::system_clock> m_EndTime;
     bool                                               m_bRunning = false;
 };
-#pragma region EngineTyps
 class GameObject {
 public:
     COORD Pos;
 public:
     string TextureObject;
 };
+COORD GetConsoleCursorPosition(HANDLE hConsoleOutput)
+    {
+        CONSOLE_SCREEN_BUFFER_INFO cbsi;
+        if (GetConsoleScreenBufferInfo(hConsoleOutput, &cbsi))
+        {
+            return cbsi.dwCursorPosition;
+        }
+        else
+        {
+            // The function failed. Call GetLastError() for details.
+            COORD invalid = { 0, 0 };
+            return invalid;
+        }
+    }
 class Draw {
 public:
     void EreseObject(COORD coord,GameObject object) {
-        for (int i = 0;i < object.TextureObject.length() - 1;i++)
+        for (int i = 0;i < object.TextureObject.length();i++)
         {
             SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
             printf(" ");
@@ -74,6 +88,11 @@ public:
     void DrawObject(COORD coord,GameObject object) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
         printf("%s", object.TextureObject.c_str());
+    }
+public:
+    void DrawString(string Texture,COORD coord = GetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE))) {
+        SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+        printf("%s", Texture.c_str());
     }
 };
 Draw* draw;
@@ -87,9 +106,9 @@ class Collision {
 class Controller {
 public:
     /// <summary>
-    /// Перемещение для персонажа.Кардинальных отличий не имеет,но более удобно
+    /// Перемещение
     /// </summary>
-    void PlayerMove(GameObject &MoveObject,int speed,int directionX,int directionY) {
+    void ObjectMove(GameObject &MoveObject,int speed,int directionX,int directionY) {
 
         draw->EreseObject(MoveObject.Pos, MoveObject);
 
@@ -97,22 +116,8 @@ public:
         MoveObject.Pos.Y += speed * directionY;
         draw->DrawObject(MoveObject.Pos, MoveObject);
     }
-    /// <summary>
-    /// Перемещение для других объектов
-    /// </summary>
-    void ObjectMove();
 };
 Controller* controller;
-/// <summary>
-/// Стартовая постройка уровня.Срабатывает только в старте
-/// </summary>
-class StartBuildLevel {
-public:
-    void BuildGameScene(string GameLine) {
-        printf("%s",GameLine.c_str());
-    }
-};
-StartBuildLevel* startBuildLevel;
 /// <summary>
 /// Постройка уровня для нового кадра
 /// </summary>
@@ -122,16 +127,9 @@ public:
 };
 ReBuildLevel* reBuildLevel;
 #pragma endregion
-#pragma region GameMethod
-void Start();
-void Tick();
-void Render();
-char GetUserInput() {
-    char Input;
-    Input = _getch();
-    return Input ;
-}
-GameObject CreateObject(string TextureObject,int StartXPos = 0,int StartYPos = 0) {
+
+#pragma region EngineMethod
+GameObject CreateObject(string TextureObject, int StartXPos = 0, int StartYPos = 0) {
     GameObject newObject;
     newObject.Pos.X = StartXPos;
     newObject.Pos.Y = StartYPos;
@@ -140,46 +138,69 @@ GameObject CreateObject(string TextureObject,int StartXPos = 0,int StartYPos = 0
     printf("%s", TextureObject.c_str());
     return newObject;
 }
+
+char GetUserInput() {
+    char Input;
+    Input = _getch();
+    return Input;
+}
+
+void Start();
+void Tick();
+vector <GameObject> AllGameObjects;
+void Render();
+
 #pragma endregion
+
 #pragma region Game
-#pragma region GameField
+
 class GameSceneInfo {
 public:
     string UPorDownBorder = "=================================================================\n";
 public:
     string SideBorder = "||                                                             ||\n";
 };
-#pragma endregion
-list <GameObject> AllGameObjects;
-#pragma endregion
-#pragma endregion
-
 GameSceneInfo* gameSceneInfo;
+
+GameObject player;
+Timer moveTimer;
+Timer shootTimer;
+Timer bulletMoveTimer;
 
 
 void initializator() {
-    startBuildLevel = new StartBuildLevel();
     reBuildLevel = new ReBuildLevel();
     gameSceneInfo = new GameSceneInfo();
     draw = new Draw();
     controller = new Controller();
 }
-bool Move(GameObject &player) {
+void BuildGameScene() {
+    COORD coord;
+    draw->DrawString(gameSceneInfo->UPorDownBorder);
+    for (int i = 0; i < 20; i++)
+    {
+        draw->DrawString(gameSceneInfo->SideBorder);
+    }
+    draw->DrawString(gameSceneInfo->UPorDownBorder);
+}
+
+#pragma region CustomMethods
+bool Move(GameObject& player) {
 
     if (GetAsyncKeyState(0x41)) {
-        controller->PlayerMove(player, 1, -1, 0);
+        controller->ObjectMove(player, 1, -1, 0);
         return true;
     }
     else if (GetAsyncKeyState(0x44)) {
-        controller->PlayerMove(player, 1, 1, 0);
+        controller->ObjectMove(player, 1, 1, 0);
         return true;
     }
     else if (GetAsyncKeyState(0x57)) {
-        controller->PlayerMove(player, 1, 0, -1);
+        controller->ObjectMove(player, 1, 0, -1);
         return true;
     }
     else if (GetAsyncKeyState(0x53)) {
-        controller->PlayerMove(player, 1, 0, 1);
+        controller->ObjectMove(player, 1, 0, 1);
         return true;
     }
     else {
@@ -187,12 +208,13 @@ bool Move(GameObject &player) {
     }
 }
 
-list<GameObject> AllBullet;
+vector<GameObject> AllBullet;
 bool Shoot(COORD pos) {
     if (GetAsyncKeyState(0x20)) {
         GameObject bullet;
+        bullet.TextureObject = "---";
         bullet.Pos = pos;
-        bullet.TextureObject = '--';
+        draw->DrawObject(bullet.Pos,bullet);
         AllBullet.push_back(bullet);
         return true;
     }
@@ -201,44 +223,60 @@ bool Shoot(COORD pos) {
         return false;
     }
 }
+#pragma endregion
+
+void Start() {
+    player = CreateObject("-||\n", 20, 7);
+    moveTimer.start();
+    shootTimer.start();
+    bulletMoveTimer.start();
+}
+void Tick() {
+    if (moveTimer.elapsedMilliseconds() > 50) {
+        if (Move(player)) {
+            moveTimer.stop();
+            moveTimer.start();
+        }
+    }
+    if (shootTimer.elapsedMilliseconds() > 300) {
+        COORD coord;
+        coord.X = player.Pos.X - 3;
+        coord.Y = player.Pos.Y;
+        if (Shoot(coord)) {
+            shootTimer.stop();
+            shootTimer.start();
+        }
+    }
+    if (bulletMoveTimer.elapsedMilliseconds() > 100) {
+        for (int i = 0; i < AllBullet.size(); i++)
+        {
+            controller->ObjectMove(AllBullet[i],1,-1,0);
+        }
+        bulletMoveTimer.stop();
+        bulletMoveTimer.start();
+    }
+}
+void Render() {
+
+}
 
 int main()
 {
     initializator();
-
-#pragma region BuildScene
-    startBuildLevel->BuildGameScene(gameSceneInfo->UPorDownBorder);
-    for (int i = 0; i < 20; i++)
-    {
-        startBuildLevel->BuildGameScene(gameSceneInfo->SideBorder);
-    }
-    startBuildLevel->BuildGameScene(gameSceneInfo->UPorDownBorder);
-#pragma endregion
+    BuildGameScene();
 
     //AllGameObjects.insert(CreateObject(3,3));
-    GameObject player = CreateObject("-||\n", 20, 7);
-
-    Timer moveTimer;
-    Timer shootTimer;
-    moveTimer.start();
-    shootTimer.start();
+    Start();
     while (true)
     {
-        while (shootTimer.elapsedMilliseconds() > 300) {
-            if (Shoot(player.Pos)) {
-                shootTimer.start();
-            }
-        }
-        while (moveTimer.elapsedMilliseconds() > 50) {
-            if (Move(player)) {
-                moveTimer.start();
-            }
-        }
+        Tick();
+        Render();
     }
-       
+         
     COORD coord;
     coord.X = 0;
     coord.Y = 25;
     SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
 }
 
+#pragma endregion
