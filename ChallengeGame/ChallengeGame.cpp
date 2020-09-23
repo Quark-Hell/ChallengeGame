@@ -59,13 +59,23 @@ public:
     COORD Pos;
 public:
     string TextureObject;
-};
-COORD GetConsoleCursorPosition(HANDLE hConsoleOutput)
-    {
-        CONSOLE_SCREEN_BUFFER_INFO cbsi;
-        if (GetConsoleScreenBufferInfo(hConsoleOutput, &cbsi))
+    bool KillXY(GameObject &gameObject) {
+        if (Pos.X < 0 || Pos.Y < 0) {
+            return true;
+        }
+        else
         {
-            return cbsi.dwCursorPosition;
+            return false;
+        }
+    }
+};
+COORD GetConsoleCursorPosition()
+    {
+    HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+        CONSOLE_SCREEN_BUFFER_INFO csbi;
+        if (GetConsoleScreenBufferInfo(hCon, &csbi))
+        {
+            return csbi.dwCursorPosition;
         }
         else
         {
@@ -74,6 +84,15 @@ COORD GetConsoleCursorPosition(HANDLE hConsoleOutput)
             return invalid;
         }
     }
+LPTSTR ReadConsoleOut(COORD coord) {
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
+
+    HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+    LPTSTR lpCharacter = new TCHAR[1];
+    DWORD dwReaden = 0;
+    ReadConsoleOutputCharacter(hCon, lpCharacter, 1, GetConsoleCursorPosition(), &dwReaden);
+    return lpCharacter;
+}
 class Draw {
 public:
     void EreseObject(COORD coord,GameObject object) {
@@ -90,16 +109,40 @@ public:
         printf("%s", object.TextureObject.c_str());
     }
 public:
-    void DrawString(string Texture,COORD coord = GetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE))) {
+    void DrawString(string Texture,COORD coord = GetConsoleCursorPosition()) {
         SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), coord);
         printf("%s", Texture.c_str());
     }
 };
 Draw* draw;
+
+vector<vector<string>> Map;
 class Collision {
-
+    bool СontinuedCollision() {
+        //TODO:
+        if (true) {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+public:
+    bool StandartCollision(COORD coord) {
+        LPTSTR lpCharacter = ReadConsoleOut(coord);
+        string str;
+        str = lpCharacter[0];
+        if (str == " ") {
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
 };
-
+Collision* collision;
 /// <summary>
 /// Класс перемещения объекта.Тут будет все виды перемещения
 /// </summary>
@@ -108,33 +151,42 @@ public:
     /// <summary>
     /// Перемещение
     /// </summary>
-    void ObjectMove(GameObject &MoveObject,int speed,int directionX,int directionY) {
+    COORD ObjectMove(GameObject &MoveObject,int speed,int directionX,int directionY) {
+        COORD collisionCoord = MoveObject.Pos;
+#pragma region Костыль
+        if (directionX < 0 || directionX == 0) {
+            collisionCoord.X += speed * directionX;
+            collisionCoord.Y += speed * directionY;
+        }
+        else
+        {
+            collisionCoord.X += speed * directionX + MoveObject.TextureObject.size() - 1;
+            collisionCoord.Y += speed * directionY;
+        }
+#pragma endregion
 
-        draw->EreseObject(MoveObject.Pos, MoveObject);
+        if (collision->StandartCollision(collisionCoord)) {
+            draw->EreseObject(MoveObject.Pos, MoveObject);
 
-        MoveObject.Pos.X += speed * directionX;
-        MoveObject.Pos.Y += speed * directionY;
-        draw->DrawObject(MoveObject.Pos, MoveObject);
+            MoveObject.Pos.X += speed * directionX;
+            MoveObject.Pos.Y += speed * directionY;
+
+            draw->DrawObject(MoveObject.Pos, MoveObject);
+      
+        }
+        return MoveObject.Pos;
     }
 };
 Controller* controller;
-/// <summary>
-/// Постройка уровня для нового кадра
-/// </summary>
-class ReBuildLevel {
-public:
-    void ChangeGameScene(GameObject gameObject);
-};
-ReBuildLevel* reBuildLevel;
 #pragma endregion
 
 #pragma region EngineMethod
-GameObject CreateObject(string TextureObject, int StartXPos = 0, int StartYPos = 0) {
-    GameObject newObject;
-    newObject.Pos.X = StartXPos;
-    newObject.Pos.Y = StartYPos;
-    newObject.TextureObject = TextureObject;
-    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), newObject.Pos);
+GameObject* CreateObject(string TextureObject, int StartXPos = 0, int StartYPos = 0) {
+    GameObject* newObject = new GameObject;
+    newObject->Pos.X = StartXPos;
+    newObject->Pos.Y = StartYPos;
+    newObject->TextureObject = TextureObject;
+    SetConsoleCursorPosition(GetStdHandle(STD_OUTPUT_HANDLE), newObject->Pos);
     printf("%s", TextureObject.c_str());
     return newObject;
 }
@@ -161,21 +213,21 @@ public:
     string SideBorder = "||                                                             ||\n";
 };
 GameSceneInfo* gameSceneInfo;
+GameObject* player;
 
-GameObject player;
 Timer moveTimer;
 Timer shootTimer;
 Timer bulletMoveTimer;
 
 
 void initializator() {
-    reBuildLevel = new ReBuildLevel();
     gameSceneInfo = new GameSceneInfo();
     draw = new Draw();
     controller = new Controller();
 }
 void BuildGameScene() {
     COORD coord;
+
     draw->DrawString(gameSceneInfo->UPorDownBorder);
     for (int i = 0; i < 20; i++)
     {
@@ -185,22 +237,24 @@ void BuildGameScene() {
 }
 
 #pragma region CustomMethods
-bool Move(GameObject& player) {
+bool Move(GameObject &player) {
+    HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hCon, FOREGROUND_GREEN);
 
     if (GetAsyncKeyState(0x41)) {
-        controller->ObjectMove(player, 1, -1, 0);
+        player.Pos = controller->ObjectMove(player, 1, -1, 0);
         return true;
     }
     else if (GetAsyncKeyState(0x44)) {
-        controller->ObjectMove(player, 1, 1, 0);
+        player.Pos = controller->ObjectMove(player, 1, 1, 0);
         return true;
     }
     else if (GetAsyncKeyState(0x57)) {
-        controller->ObjectMove(player, 1, 0, -1);
+        player.Pos = controller->ObjectMove(player, 1, 0, -1);
         return true;
     }
     else if (GetAsyncKeyState(0x53)) {
-        controller->ObjectMove(player, 1, 0, 1);
+        player.Pos = controller->ObjectMove(player, 1, 0, 1);
         return true;
     }
     else {
@@ -223,34 +277,49 @@ bool Shoot(COORD pos) {
         return false;
     }
 }
+
 #pragma endregion
 
+
 void Start() {
-    player = CreateObject("-||\n", 20, 7);
+    HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+    SetConsoleTextAttribute(hCon, FOREGROUND_GREEN);
+
+    player = CreateObject("-||", 20, 7);
+
+    /*
+    LPTSTR lpCharacter = ReadConsoleOut();
+    string str;
+    str = lpCharacter[0];
+    printf("%ls", lpCharacter);
+    */
+
     moveTimer.start();
     shootTimer.start();
     bulletMoveTimer.start();
 }
 void Tick() {
     if (moveTimer.elapsedMilliseconds() > 50) {
-        if (Move(player)) {
+        if (Move(*player)) {
             moveTimer.stop();
             moveTimer.start();
         }
     }
     if (shootTimer.elapsedMilliseconds() > 300) {
         COORD coord;
-        coord.X = player.Pos.X - 3;
-        coord.Y = player.Pos.Y;
+        coord.X = player->Pos.X - 3;
+        coord.Y = player->Pos.Y;
         if (Shoot(coord)) {
             shootTimer.stop();
             shootTimer.start();
         }
     }
     if (bulletMoveTimer.elapsedMilliseconds() > 100) {
+        HANDLE hCon = GetStdHandle(STD_OUTPUT_HANDLE);
+        SetConsoleTextAttribute(hCon, FOREGROUND_RED);
         for (int i = 0; i < AllBullet.size(); i++)
         {
-            controller->ObjectMove(AllBullet[i],1,-1,0);
+            AllBullet[i].Pos = controller->ObjectMove(AllBullet[i],1,-1,0);
         }
         bulletMoveTimer.stop();
         bulletMoveTimer.start();
@@ -272,7 +341,6 @@ int main()
         Tick();
         Render();
     }
-         
     COORD coord;
     coord.X = 0;
     coord.Y = 25;
