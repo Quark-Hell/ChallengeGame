@@ -171,7 +171,13 @@ public:
 };
 Draw* draw;
 
-vector<GameObject*> AllGameObjectWithCollision;
+/// <summary>
+/// 0-Collision
+/// 1-Bullet
+/// 2-Enemy
+/// </summary>
+vector<vector<GameObject*>> AllGameObjects;
+
 class Collision {
 public:
     GameObject* StandartCollision(COORD coord) {
@@ -179,14 +185,14 @@ public:
         string str;
         str = lpCharacter[0];
         if (str != " ") {
-            for (int i = 0; i < AllGameObjectWithCollision.size(); i++) {
-                COORD start = AllGameObjectWithCollision[i]->CollisionCoordInWorld[0];
-                COORD end = AllGameObjectWithCollision[i]->CollisionCoordInWorld[AllGameObjectWithCollision[i]->CollisionCoordInWorld.size() - 1];
+            for (int i = 0; i < AllGameObjects[0].size(); i++) {
+                COORD start = AllGameObjects[0][i]->CollisionCoordInWorld[0];
+                COORD end = AllGameObjects[0][i]->CollisionCoordInWorld[AllGameObjects[0][i]->CollisionCoordInWorld.size() - 1];
                 COORD cursorPos = consoleInfo->GetConsoleCursorPosition();
                 if (start.X <= cursorPos.X && end.X >= cursorPos.X) {
                     if (start.Y <= cursorPos.Y && end.Y >= cursorPos.Y)
                     {
-                        return AllGameObjectWithCollision[i];
+                        return AllGameObjects[0][i];
                     }
                 }
             }
@@ -206,7 +212,7 @@ public:
     COORD ObjectMove(GameObject &MoveObject,int speed,int directionX,int directionY) {
         COORD collisionCoord = MoveObject.Pos;
 #pragma region Оптимизированное решение
-        if (directionX < 0 || directionX == 0) {
+        if (directionX <= 0) {
             collisionCoord.X += speed * directionX;
             collisionCoord.Y += speed * directionY;
         }
@@ -221,11 +227,11 @@ public:
 
             draw->EraseObject(MoveObject);
 
-            MoveObject.CollisionCoordInWorld.clear();
-            MoveObject.SetCollision();
-
             MoveObject.Pos.X += speed * directionX;
             MoveObject.Pos.Y += speed * directionY;
+
+            MoveObject.CollisionCoordInWorld.clear();
+            MoveObject.SetCollision();
 
             draw->DrawObject(MoveObject.Pos, MoveObject);
       
@@ -238,6 +244,7 @@ public:
     }
 };
 Controller* controller;
+
 #pragma endregion
 
 #pragma region EngineMethod
@@ -255,7 +262,7 @@ GameObject* CreateObject(string TextureObject,bool Collision, int StartXPos = 0,
     
     draw->DrawObject(consoleInfo->GetConsoleCursorPosition(),*newObject);
     if (Collision) {
-        AllGameObjectWithCollision.push_back(newObject);
+        AllGameObjects[0].push_back(newObject);
         newObject->SetCollision();
     }
     return newObject;
@@ -269,7 +276,6 @@ char GetUserInput() {
 
 void Start();
 void Tick();
-vector <GameObject> AllGameObjects;
 
 #pragma endregion
 
@@ -283,6 +289,8 @@ GameObject* player;
 int PlayerLife = 3;
 int PlayerScore = 0;
 
+bool defeat = false;
+
 Timer movePlayerTimer;
 Timer shootTimer;
 Timer bulletMoveTimer;
@@ -295,6 +303,7 @@ void initializator() {
     draw = new Draw();
     controller = new Controller();
     consoleInfo = new ConsoleInfo();
+    AllGameObjects.resize(3);
 }
 void BuildGameScene() {
     draw->SetConsoleColour(15);
@@ -337,11 +346,10 @@ bool Move(GameObject &player) {
     }
 }
 
-vector<GameObject*> AllBullet;
 bool Shoot(COORD pos) {
     if (GetAsyncKeyState(0x20)) {
         GameObject* bullet = CreateObject("--",true,pos.X,pos.Y,4,"null");
-        AllBullet.push_back(bullet);
+        AllGameObjects[1].push_back(bullet);
         return true;
     }
     else
@@ -349,12 +357,11 @@ bool Shoot(COORD pos) {
         return false;
     }
 }
-vector<GameObject*> AllEnemy;
 bool SpawnEnemy() {
     COORD coord;
     coord.X = 3;
     coord.Y = rand() % 18 + 2;
-    AllEnemy.push_back(CreateObject("||-",true, coord.X, coord.Y,6));
+    AllGameObjects[2].push_back(CreateObject("||-", true, coord.X, coord.Y, 6, "enemy"));
     return true;
 }
 
@@ -374,6 +381,23 @@ void OutputScore() {
 
     consoleInfo->SetCursorPosition(start);
     printf("%i",PlayerScore);
+}
+void OutputLife() {
+    draw->SetConsoleColour(14);
+
+    COORD start;
+    start.X = 12;
+    start.Y = 24;
+
+    int ScoreLength = to_string(PlayerLife).size();
+
+    COORD end;
+    end.X = start.X + ScoreLength;
+    end.Y = 24;
+    draw->EraseString(start, end);
+
+    consoleInfo->SetCursorPosition(start);
+    printf("%i", PlayerLife);
 }
 
 void Effect() {
@@ -428,36 +452,95 @@ void Effect() {
         }
     }
 }
+void EffectWithErase() {
+    COORD start;
+    start.X = 2;
+    start.Y = 1;
+
+    COORD end;
+    end.X = 63;
+    end.Y = 20;
+
+    for (int i = start.X; i < end.X; i++) {
+        for (int x = start.Y; x < end.Y; x++) {
+
+            COORD currentCoord;
+            currentCoord.X = i;
+            currentCoord.Y = x;
+
+            draw->DrawString(" ", currentCoord, 75);
+        }
+    }
+    for (int i = start.X; i < end.X; i++) {
+        for (int x = start.Y; x < end.Y; x++) {
+
+            COORD currentCoord;
+            currentCoord.X = i;
+            currentCoord.Y = x;
+
+            draw->DrawString(" ", consoleInfo->GetConsoleCursorPosition(), 15);
+        }
+    }
+}
 
 void EnemyOverlap() {
-    for (int i = 0; i < AllEnemy.size(); i++) {
-        if (AllEnemy[i]->OverlappedObject != nullptr) {
+    for (int i = 0; i < AllGameObjects[2].size(); i++) {
+        if (AllGameObjects[2][i]->OverlappedObject != nullptr) {
             //удар с пулей
-            if (AllEnemy[i]->OverlappedObject->TextureObject == "--") {
-                draw->EraseObject(*AllEnemy[i]);
-                AllEnemy.erase(AllEnemy.begin() + i);
+            if (AllGameObjects[2][i]->OverlappedObject->TextureObject == "--") {
+                draw->EraseObject(*AllGameObjects[2][i]);
+
+#pragma region Костыль
+                for (int x = 0; x < AllGameObjects[0].size(); x++) {
+                    if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
+                        AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
+                    }
+                }
+#pragma endregion
+
+                AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
 
                 PlayerScore++;
                 OutputScore();
 
                 break;
             }
-            //граница карты
-            if (AllEnemy[i]->OverlappedObject->Tag == "border")
-            {
-                draw->EraseObject(*AllEnemy[i]);
-                AllEnemy.erase(AllEnemy.begin() + i);
+            if (AllGameObjects[2][i]->OverlappedObject->Tag == "player") {
+                draw->EraseObject(*AllGameObjects[2][i]);
+
+#pragma region Костыль
+                for (int x = 0; x < AllGameObjects[0].size(); x++) {
+                    if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
+                        AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
+                    }
+                }
+#pragma endregion
+
+                AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
 
                 PlayerLife--;
+                OutputLife();
                 Effect();
 
                 break;
             }
-            if (AllEnemy[i]->OverlappedObject->Tag == "player") {
-                draw->EraseObject(*AllEnemy[i]);
-                AllEnemy.erase(AllEnemy.begin() + i);
+            //граница карты
+            if (AllGameObjects[2][i]->OverlappedObject->Tag == "border")
+            {
+                draw->EraseObject(*AllGameObjects[2][i]);
+
+#pragma region Костыль
+                for (int x = 0; x < AllGameObjects[0].size(); x++) {
+                    if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
+                        AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
+                    }
+                }
+#pragma endregion
+
+                AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
 
                 PlayerLife--;
+                Effect();
 
                 break;
             }
@@ -465,10 +548,64 @@ void EnemyOverlap() {
     }
 }
 void BulletOverlap() {
-    for (int i = 0; i < AllBullet.size();i++) {
-        if (AllBullet[i]->OverlappedObject != nullptr) {
-            draw->EraseObject(*AllBullet[i]);
-            AllBullet.erase(AllBullet.begin() + i);
+    for (int i = 0; i < AllGameObjects[1].size();i++) {
+        if (AllGameObjects[1][i]->OverlappedObject != nullptr) {
+            draw->EraseObject(*AllGameObjects[1][i]);
+
+#pragma region Костыль
+            for (int x = 0; x < AllGameObjects[0].size();x++) {
+                if (AllGameObjects[1][i] == AllGameObjects[0][x]) {
+                    AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
+                }
+            }
+#pragma endregion
+            AllGameObjects[1].erase(AllGameObjects[1].begin() + i);
+
+        }
+    }
+}
+
+void Restart() {
+    AllGameObjects[0].clear();
+    AllGameObjects[1].clear();
+    AllGameObjects[2].clear();
+
+    PlayerLife = 3;
+    PlayerScore = 0;
+    defeat = false;
+
+    EffectWithErase();
+}
+
+bool Defeat() {
+    if (PlayerLife <= 0) {
+        return true;
+    }
+    else
+    {
+        return false;
+    }
+}
+void DefeatInfo() {
+    COORD coord;
+    coord.X = 0;
+    coord.Y = 27;
+
+    consoleInfo->SetCursorPosition(coord);
+    draw->SetConsoleColour(5);
+
+    printf("You defeat\n");
+    printf("Press Space,if you want to try again\n");
+    printf("Or press twice Esc for exit the game\n");
+
+    while (true)
+    {
+        if (GetAsyncKeyState(0x20)) {
+            Restart();
+            break;
+        }
+        if (GetAsyncKeyState(0x1B)) {
+            break;
         }
     }
 }
@@ -478,16 +615,24 @@ void BulletOverlap() {
 void Start() {
 
     player = CreateObject("-||", true, 50, 7,2,"player");
-    AllGameObjectWithCollision.push_back(player);
+
+    AllGameObjects[0].push_back(player);
 
     COORD coord;
     coord.X = 2;
     coord.Y = 22;
     consoleInfo->SetCursorPosition(coord);
     draw->SetConsoleColour(14);
-    printf("Your Score: ");
 
+    printf("Your Score: ");
     OutputScore();
+
+    COORD output;
+    output.X = 2;
+    output.Y = 24;
+    consoleInfo->SetCursorPosition(output);
+    printf("Your Life:");
+    OutputLife();
     
     movePlayerTimer.start();
     shootTimer.start();
@@ -513,9 +658,9 @@ void Tick() {
         }
     }
     if (bulletMoveTimer.elapsedMilliseconds() > 100) {
-        for (int i = 0; i < AllBullet.size(); i++)
+        for (int i = 0; i < AllGameObjects[1].size(); i++)
         {
-            AllBullet[i]->Pos = controller->ObjectMove(*AllBullet[i],1,-1,0);
+            AllGameObjects[1][i]->Pos = controller->ObjectMove(*AllGameObjects[1][i],1,-1,0);
         }
         bulletMoveTimer.stop();
         bulletMoveTimer.start();
@@ -527,8 +672,8 @@ void Tick() {
         }
     }
     if (moveEnemyTimer.elapsedMilliseconds() >150) {
-        for (int i = 0; i < AllEnemy.size();i++) {
-            controller->ObjectMove(*AllEnemy[i],1,1,0);
+        for (int i = 0; i < AllGameObjects[2].size();i++) {
+            controller->ObjectMove(*AllGameObjects[2][i],1,1,0);
         }
         moveEnemyTimer.stop();
         moveEnemyTimer.start();
@@ -543,18 +688,22 @@ void Tick() {
 
 int main()
 {
+    start:
     initializator();
     BuildGameScene();
 
     Start();
-    while (true)
+    while (defeat == false)
     {
         Tick();
+        defeat = Defeat();
     }
-    COORD coord;
-    coord.X = 0;
-    coord.Y = 25;
-    consoleInfo->SetCursorPosition(coord);
+
+    DefeatInfo();
+
+    if (defeat == false) {
+        goto start;
+    }
 }
 
 #pragma endregion
