@@ -289,6 +289,8 @@ GameObject* player;
 int PlayerLife = 3;
 int PlayerScore = 0;
 
+int TimeSpawnEnemy = 4000;
+
 bool defeat = false;
 
 Timer movePlayerTimer;
@@ -297,6 +299,7 @@ Timer bulletMoveTimer;
 Timer spawnEnemyTimer;
 Timer moveEnemyTimer;
 Timer CollisionTimer;
+Timer СomplicationTimer;
 
 void initializator() {
     gameSceneInfo = new GameSceneInfo();
@@ -572,6 +575,7 @@ void Restart() {
 
     PlayerLife = 3;
     PlayerScore = 0;
+    TimeSpawnEnemy = 4000;
     defeat = false;
 
     EffectWithErase();
@@ -610,6 +614,12 @@ void DefeatInfo() {
     }
 }
 
+void СomplicationGame() {
+    if (TimeSpawnEnemy >= 300) {
+        TimeSpawnEnemy--;
+    }
+}
+
 #pragma endregion
 
 void Start() {
@@ -624,7 +634,7 @@ void Start() {
     consoleInfo->SetCursorPosition(coord);
     draw->SetConsoleColour(14);
 
-    printf("Your Score: ");
+    printf("Your Score:                  ");
     OutputScore();
 
     COORD output;
@@ -640,9 +650,10 @@ void Start() {
     spawnEnemyTimer.start();
     moveEnemyTimer.start();
     CollisionTimer.start();
+    СomplicationTimer.start();
 }
 void Tick() {
-    if (movePlayerTimer.elapsedMilliseconds() > 50) {
+    if (movePlayerTimer.elapsedMilliseconds() > 80) {
         if (Move(*player)) {
             movePlayerTimer.stop();
             movePlayerTimer.start();
@@ -665,7 +676,7 @@ void Tick() {
         bulletMoveTimer.stop();
         bulletMoveTimer.start();
     }
-    if (spawnEnemyTimer.elapsedSeconds() > 4) {
+    if (spawnEnemyTimer.elapsedMilliseconds() > TimeSpawnEnemy) {
         if (SpawnEnemy()) {
             spawnEnemyTimer.stop();
             spawnEnemyTimer.start();
@@ -683,6 +694,11 @@ void Tick() {
         BulletOverlap();
         CollisionTimer.stop();
         CollisionTimer.start();
+    }
+    if (СomplicationTimer.elapsedMilliseconds() > 30) {
+        СomplicationGame();
+        СomplicationTimer.stop();
+        СomplicationTimer.start();
     }
 }
 
