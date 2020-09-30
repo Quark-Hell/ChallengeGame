@@ -192,11 +192,13 @@ public:
                 if (start.X <= cursorPos.X && end.X >= cursorPos.X) {
                     if (start.Y <= cursorPos.Y && end.Y >= cursorPos.Y)
                     {
+                        delete(lpCharacter);
                         return AllGameObjects[0][i];
                     }
                 }
             }
         }
+        delete(lpCharacter);
         return nullptr;
     }
 };
@@ -225,7 +227,7 @@ public:
         MoveObject.OverlappedObject = collision->StandartCollision(collisionCoord);
         if (MoveObject.OverlappedObject == nullptr) {
 
-            draw->EraseObject(MoveObject);
+             draw->EraseObject(MoveObject);
 
             MoveObject.Pos.X += speed * directionX;
             MoveObject.Pos.Y += speed * directionY;
@@ -430,7 +432,8 @@ void Effect() {
                 string str;
                 str = currentLPTSTR[0];
                 draw->DrawString(str, consoleInfo->GetConsoleCursorPosition(),75);
-            }                 
+            }    
+            delete(currentLPTSTR);
         }
     }
     for (int i = start.X; i < end.X; i++) {
@@ -452,8 +455,10 @@ void Effect() {
                 str = currentLPTSTR[0];
                 draw->DrawString(str, consoleInfo->GetConsoleCursorPosition(), 15);
             }
+            delete(currentLPTSTR);
         }
     }
+
 }
 void EffectWithErase() {
     COORD start;
@@ -493,15 +498,15 @@ void EnemyOverlap() {
             if (AllGameObjects[2][i]->OverlappedObject->TextureObject == "--") {
                 draw->EraseObject(*AllGameObjects[2][i]);
 
-#pragma region Костыль
+#pragma region Удаление из памяти
                 for (int x = 0; x < AllGameObjects[0].size(); x++) {
                     if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
                         AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
                     }
                 }
-#pragma endregion
 
                 AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
+#pragma endregion
 
                 PlayerScore++;
                 OutputScore();
@@ -511,7 +516,28 @@ void EnemyOverlap() {
             if (AllGameObjects[2][i]->OverlappedObject->Tag == "player") {
                 draw->EraseObject(*AllGameObjects[2][i]);
 
-#pragma region Костыль
+#pragma region Удаление из памяти
+                for (int x = 0; x < AllGameObjects[0].size(); x++) {
+                    if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
+                        AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
+                    }
+                }
+
+                AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
+#pragma endregion
+
+                PlayerLife--;
+                OutputLife();
+                Effect();
+
+                break;
+            }
+            //граница карты
+            if (AllGameObjects[2][i]->OverlappedObject->Tag == "border")
+            {
+                draw->EraseObject(*AllGameObjects[2][i]);
+
+#pragma region Костыль(одобрено советом программистов)
                 for (int x = 0; x < AllGameObjects[0].size(); x++) {
                     if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
                         AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
@@ -527,26 +553,6 @@ void EnemyOverlap() {
 
                 break;
             }
-            //граница карты
-            if (AllGameObjects[2][i]->OverlappedObject->Tag == "border")
-            {
-                draw->EraseObject(*AllGameObjects[2][i]);
-
-#pragma region Костыль
-                for (int x = 0; x < AllGameObjects[0].size(); x++) {
-                    if (AllGameObjects[2][i] == AllGameObjects[0][x]) {
-                        AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
-                    }
-                }
-#pragma endregion
-
-                AllGameObjects[2].erase(AllGameObjects[2].begin() + i);
-
-                PlayerLife--;
-                Effect();
-
-                break;
-            }
         }
     }
 }
@@ -555,15 +561,15 @@ void BulletOverlap() {
         if (AllGameObjects[1][i]->OverlappedObject != nullptr) {
             draw->EraseObject(*AllGameObjects[1][i]);
 
-#pragma region Костыль
+#pragma region Удаление из памяти
             for (int x = 0; x < AllGameObjects[0].size();x++) {
                 if (AllGameObjects[1][i] == AllGameObjects[0][x]) {
+                    delete(AllGameObjects[0][x]);
                     AllGameObjects[0].erase(AllGameObjects[0].begin() + x);
                 }
             }
 #pragma endregion
             AllGameObjects[1].erase(AllGameObjects[1].begin() + i);
-
         }
     }
 }
